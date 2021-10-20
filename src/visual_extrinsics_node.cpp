@@ -130,6 +130,64 @@ void LoadExtrinsics(const string path2calibrations, std::vector<cv::Matx44f>& ex
     
 }
 
+void LoadExtrinsicsHuizhou(const string path2calibrations, std::vector<cv::Matx44f>& extrinsics, int& nrCams)
+{
+    
+    string mcs_settings = path2calibrations;
+    std::cout << "load path: " << mcs_settings << std::endl;
+    cv::FileStorage mcs_calib_data(mcs_settings, cv::FileStorage::READ);
+    nrCams = (int)mcs_calib_data["CameraSystem.nrCams"];
+    std::string cam_type = std::string(mcs_calib_data["CameraSystem.CamType"]);
+    std::cout << "cam type: " << cam_type << std::endl;
+    std::cout << "num_cams: " << nrCams << std::endl;
+
+    extrinsics.resize(nrCams);
+
+    for (int c = 0; c < nrCams; ++c)
+    {
+        // all M_c
+        cv::Matx61f tmp;
+        for (int p = 0; p < 6; ++p)
+        {
+            string param = "CameraSystem.cam" + std::to_string(c + 1) + "_" + std::to_string(p+1);
+            tmp(p) = mcs_calib_data[param];
+        }
+        std::cout << "load vector: " << tmp << std::endl;
+        
+        cv::Matx33f rot = rodrigue2rot<float>(tmp.get_minor<3,1>(0,0));
+  
+        cv::Matx33f rot_inv = rot.inv();
+        cv::Matx31f tvec = tmp.get_minor<3,1>(3,0);
+        cv::Matx31f trans = - rot_inv * tvec;
+            
+    
+        cv::Matx44f temp = cv::Matx44f::eye();
+        temp(0,0) = rot_inv(0,0);
+        temp(0,1) = rot_inv(0,1);
+        temp(0,2) = rot_inv(0,2);
+        temp(1,0) = rot_inv(1,0);
+        temp(1,1) = rot_inv(1,1);
+        temp(1,2) = rot_inv(1,2);
+        temp(2,0) = rot_inv(2,0);
+        temp(2,1) = rot_inv(2,1);
+        temp(2,2) = rot_inv(2,2);
+
+        temp(0,3) = trans(0);
+        temp(1,3) = trans(1);
+        temp(2,3) = trans(2);
+        std::cout << "load transform: " << std::endl;
+        std::cout << temp << std::endl;
+
+        extrinsics[c] = temp;
+        
+        RotateZToCam(c, rot);
+
+
+    }
+    std::cout << "finished loading Extrinsics " << std::endl;
+    
+}
+
 void PrintTFMatrix(const tf2::Matrix3x3& input){
     std::cout << "tf transform: " << input[0].getX() << "," << input[0].getY() << "," << input[0].getZ() <<std::endl;
     std::cout << "              " << input[1].getX() << "," << input[1].getY() << "," << input[1].getZ() <<std::endl;
@@ -175,7 +233,7 @@ int main(int argc, char **argv){
 	std::string path2extrintics = std::string(argv[1]);
     std::vector<cv::Matx44f> extrinsics;
     int nrCams;
-    LoadExtrinsics(path2extrintics, extrinsics, nrCams);
+    LoadExtrinsicsHuizhou(path2extrintics, extrinsics, nrCams);
     // std::cout << "test t0:" << extrinsics[0](3) << std::endl;
   
     for (int c = 0; c < nrCams ; c++){
