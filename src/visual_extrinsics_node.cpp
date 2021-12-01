@@ -52,6 +52,21 @@ cv::Matx<T, 4, 4> rodrigue2hom(const cv::Matx<T, 6, 1>& rodrigueRep){
     return homM;
 }
 
+cv::Matx44f invMat(const cv::Matx44f& M)
+{
+    cv::Matx33f R = M.get_minor<3, 3>(0, 0);
+    R = R.t();
+    cv::Vec3f t(M(0, 3), M(1, 3), M(2, 3));
+    t = -R * t;
+    cv::Matx44f out(
+        R(0, 0), R(0, 1), R(0, 2), t(0),
+        R(1, 0), R(1, 1), R(1, 2), t(1),
+        R(2, 0), R(2, 1), R(2, 2), t(2),
+        0.0, 0.0, 0.0, 1.0);
+
+    return out;
+}
+
 void RotateZToCam(int c, const cv::Matx<float, 3,3>& temp_rot){
     cv::Matx<float, 3, 1> input(0.0, 0.0, 1.0);
 
@@ -99,30 +114,11 @@ void LoadExtrinsics(const string path2calibrations, std::vector<cv::Matx44f>& ex
 
         M_c_s[c] = rodrigue2hom<float>(tmp);//@audit need to confirm with LC what's the representation for the rotation parameters inside the calibration file
             
-        //@audit after testing, the rvec in extrinsic file need an extra transpose to make sense
-        cv::Matx33f rot = M_c_s[c].get_minor<3,3>(0,0);
-
-        rot = rot.t();
-        {
-            //@follow-up get_minor doesn't work when modifying the submatrix. Any other way instead of these ugly low-level access?
-            M_c_s[c](0,0) = rot(0,0);
-            M_c_s[c](0,1) = rot(0,1);
-            M_c_s[c](0,2) = rot(0,2);
-            M_c_s[c](1,0) = rot(1,0);
-            M_c_s[c](1,1) = rot(1,1);
-            M_c_s[c](1,2) = rot(1,2);
-            M_c_s[c](2,0) = rot(2,0);
-            M_c_s[c](2,1) = rot(2,1);
-            M_c_s[c](2,2) = rot(2,2);
-
-        }
 
         std::cout << "load transform: " << std::endl;
-        std::cout << rot << std::endl;
 
         extrinsics[c] = M_c_s[c];
         
-        RotateZToCam(c, rot);
 
 
     }
@@ -184,6 +180,13 @@ void LoadExtrinsicsHuizhou(const string path2calibrations, std::vector<cv::Matx4
 
 
     }
+
+    // transform cam0 to be identity matrix
+    cv::Matx44f inv_cam0 = invMat(extrinsics[0]);
+    for (int c = 0; c < nrCams; ++c){
+        extrinsics[c] = inv_cam0 * extrinsics[c];
+    }
+
     std::cout << "finished loading Extrinsics " << std::endl;
     
 }
@@ -233,7 +236,7 @@ int main(int argc, char **argv){
 	std::string path2extrintics = std::string(argv[1]);
     std::vector<cv::Matx44f> extrinsics;
     int nrCams;
-    LoadExtrinsicsHuizhou(path2extrintics, extrinsics, nrCams);
+    LoadExtrinsics(path2extrintics, extrinsics, nrCams);
     // std::cout << "test t0:" << extrinsics[0](3) << std::endl;
   
     for (int c = 0; c < nrCams ; c++){
